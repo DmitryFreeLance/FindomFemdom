@@ -15,9 +15,8 @@ FROM eclipse-temurin:21-jre
 
 WORKDIR /app
 
-# Копируем ЛЮБОЙ jar из target и называем его app.jar
-# (обычно там один основной jar)
-COPY --from=build /app/target/*.jar /app/app.jar
+# Копируем именно fat-jar с манифестом
+COPY --from=build /app/target/femdom-bot-jar-with-dependencies.jar /app/app.jar
 
 RUN mkdir -p /data
 
