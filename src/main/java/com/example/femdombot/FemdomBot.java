@@ -959,7 +959,6 @@ public class FemdomBot extends TelegramLongPollingBot {
                 ❌ Платёж не подтверждён
                 
                 Возможно, перевод ещё не дошёл или сумма/данные не совпали.
-                Если вы уверены, что оплатили — напишите администратору и приложите чек 🧾
                 """);
 
             AnswerCallbackQuery a = new AnswerCallbackQuery(cb.getId());
@@ -1092,8 +1091,8 @@ public class FemdomBot extends TelegramLongPollingBot {
                 : "не указан";
 
         String finalCaption = caption + "\n\n" +
-                "тг канал: " + channelLink + "\n" +
-                "личка: " + userTag;
+                "✨Канал " + channelLink + "\n" +
+                "\uD83D\uDC8EЛичка " + userTag;
 
         PostType type = PostType.valueOf(u.pendingPostType);
         boolean approved = u.paymentApproved;
