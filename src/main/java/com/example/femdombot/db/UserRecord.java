@@ -8,12 +8,16 @@ public class UserRecord {
     public boolean verified = false;
 
     public int attemptsLeft = 5;
-    public Long verificationStartedAt;         // epoch millis
+    public Long verificationStartedAt;
     public String channelLink;
     public String verificationVideoFileId;
-    public String pendingPostType;            // название enum PostType
-    public Long lastStartAt;                  // защита от двойного /start
-    public Long lastCallbackAt;               // можно хранить и тут (на будущее)
+    public String pendingPostType;
+    public Long lastStartAt;
+    public Long lastCallbackAt;
+
+    // 👇 НОВОЕ (для ручной оплаты)
+    public boolean paymentApproved = false;     // админ подтвердил оплату
+    public Long paymentClaimedAt;               // когда пользователь нажал "Я оплатила" (epoch millis)
 
     public UserRecord(long chatId) {
         this.chatId = chatId;

@@ -15,6 +15,9 @@ public class BotConfig {
     private final long startCooldownMs;
     private final String paymentProviderToken;
 
+    // 👇 Куда публиковать посты (по умолчанию встроено)
+    private final long publishChatId;
+
     public BotConfig() {
         Dotenv dotenv = Dotenv.configure()
                 .ignoreIfMalformed()
@@ -25,6 +28,13 @@ public class BotConfig {
         this.token = getenvOrDotenv(dotenv, "BOT_TOKEN", true);
         this.username = getenvOrDotenv(dotenv, "BOT_USERNAME", true);
         this.paymentProviderToken = getenvOrDotenv(dotenv, "PAYMENT_PROVIDER_TOKEN", true);
+
+        // 👇 ID чата/канала для публикаций
+        // Если не задано — используем встроенное значение
+        String publishChatStr = getenvOrDotenv(dotenv, "PUBLISH_CHAT_ID", false);
+        this.publishChatId = (publishChatStr != null && !publishChatStr.isBlank())
+                ? Long.parseLong(publishChatStr)
+                : -1003256610748L;
 
         // БД
         String dbFile = getenvOrDotenv(dotenv, "DB_FILE", false);
@@ -95,5 +105,9 @@ public class BotConfig {
 
     public String getPaymentProviderToken() {
         return paymentProviderToken;
+    }
+
+    public long getPublishChatId() {
+        return publishChatId;
     }
 }

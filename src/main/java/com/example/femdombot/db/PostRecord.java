@@ -8,9 +8,16 @@ public class PostRecord {
     public long id;
     public long chatId;
     public PostType type;
+
+    // PHOTO / VIDEO (для корректной отправки)
+    public String mediaType;
+
     public String mediaFileId;
     public String caption;
+
     public int queuePosition;
     public LocalDateTime scheduledAt;
-    public String status; // QUEUED / PUBLISHED etc.
+
+    // PENDING_PAYMENT / QUEUED / INSTANT / PUBLISHING / PUBLISHED / FAILED / REJECTED ...
+    public String status;
 }

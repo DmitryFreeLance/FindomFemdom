@@ -15,6 +15,9 @@ public class Main {
         TelegramBotsApi api = new TelegramBotsApi(DefaultBotSession.class);
         api.registerBot(bot);
 
+        // ✅ стартуем воркер публикаций ПОСЛЕ регистрации бота
+        bot.startPublishWorker();
+
         System.out.println("Bot started");
     }
 }
