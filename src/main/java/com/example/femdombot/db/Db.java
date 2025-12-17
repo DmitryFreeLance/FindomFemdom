@@ -433,4 +433,100 @@ public class Db {
             throw new RuntimeException(e);
         }
     }
+
+    // ✅ НОВОЕ: сохранить пост и вернуть его ID (нужно для STORY модерации по postId)
+    public long savePostAndReturnId(PostRecord p) {
+        try (Connection c = getConnection();
+             PreparedStatement ps = c.prepareStatement("""
+                 INSERT INTO posts
+                   (chat_id, type, media_type, media_file_id, caption,
+                    status, queue_position, scheduled_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                 """, Statement.RETURN_GENERATED_KEYS)) {
+
+            ps.setLong(1, p.chatId);
+            ps.setString(2, p.type.name());
+            ps.setString(3, p.mediaType);
+            ps.setString(4, p.mediaFileId);
+            ps.setString(5, p.caption);
+            ps.setString(6, p.status);
+            ps.setInt(7, p.queuePosition);
+
+            long epoch = p.scheduledAt.atZone(MOSCOW_ZONE).toEpochSecond();
+            ps.setLong(8, epoch);
+
+            ps.executeUpdate();
+
+            try (ResultSet rs = ps.getGeneratedKeys()) {
+                if (rs.next()) {
+                    long id = rs.getLong(1);
+                    p.id = id;
+                    return id;
+                }
+            }
+
+            // fallback для sqlite (на всякий)
+            try (Statement st = c.createStatement();
+                 ResultSet rs = st.executeQuery("SELECT last_insert_rowid()")) {
+                if (rs.next()) {
+                    long id = rs.getLong(1);
+                    p.id = id;
+                    return id;
+                }
+            }
+
+            throw new RuntimeException("Cannot get generated id for inserted post");
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    // ✅ НОВОЕ: найти пост по ID (нужно для решения админа по STORY)
+    public PostRecord findPostById(long postId) {
+        try (Connection c = getConnection();
+             PreparedStatement ps = c.prepareStatement("""
+             SELECT id, chat_id, type, media_type, media_file_id, caption, status, queue_position, scheduled_at
+             FROM posts
+             WHERE id = ?
+             LIMIT 1
+             """)) {
+            ps.setLong(1, postId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+
+                PostRecord p = new PostRecord();
+                p.id = rs.getLong("id");
+                p.chatId = rs.getLong("chat_id");
+                p.type = PostType.valueOf(rs.getString("type"));
+                p.mediaType = rs.getString("media_type");
+                p.mediaFileId = rs.getString("media_file_id");
+                p.caption = rs.getString("caption");
+                p.status = rs.getString("status");
+                p.queuePosition = rs.getInt("queue_position");
+
+                long epoch = rs.getLong("scheduled_at");
+                p.scheduledAt = Instant.ofEpochSecond(epoch).atZone(MOSCOW_ZONE).toLocalDateTime();
+
+                return p;
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    // ✅ НОВОЕ: обновить только статус поста (для STORY)
+    public void updatePostStatus(long postId, String status) {
+        try (Connection c = getConnection();
+             PreparedStatement ps = c.prepareStatement("""
+             UPDATE posts
+             SET status = ?
+             WHERE id = ?
+             """)) {
+            ps.setString(1, status);
+            ps.setLong(2, postId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
 }

@@ -12,23 +12,21 @@ import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
+import org.telegram.telegrambots.meta.api.methods.send.SendVideo;
 import org.telegram.telegrambots.meta.api.methods.send.SendVideoNote;
 import org.telegram.telegrambots.meta.api.objects.*;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
-import org.telegram.telegrambots.meta.api.methods.send.SendVideo;
-import java.time.Instant;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
+
 import java.io.InputStream;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class FemdomBot extends TelegramLongPollingBot {
     private static final Logger log = LoggerFactory.getLogger(FemdomBot.class);
@@ -42,6 +40,11 @@ public class FemdomBot extends TelegramLongPollingBot {
     private static final String CB_PAY_BACK = "PAY_BACK";
     private static final String CB_PAY_ADMIN_OK_PREFIX = "PAY_ADMIN_OK:";
     private static final String CB_PAY_ADMIN_NO_PREFIX = "PAY_ADMIN_NO:";
+
+    // ✅ НОВОЕ: модерация "Истории" (кружочек) админом
+    private static final String CB_STORY_ADMIN_OK_PREFIX = "STORY_ADMIN_OK:";
+    private static final String CB_STORY_ADMIN_NO_PREFIX = "STORY_ADMIN_NO:";
+
     // куда публикуем
     private final long publishChatId;
 
@@ -233,6 +236,10 @@ public class FemdomBot extends TelegramLongPollingBot {
             handleAdminPaymentDecision(cb, true);
         } else if (data.startsWith(CB_PAY_ADMIN_NO_PREFIX)) {
             handleAdminPaymentDecision(cb, false);
+        } else if (data.startsWith(CB_STORY_ADMIN_OK_PREFIX)) {
+            handleAdminStoryDecision(cb, true);
+        } else if (data.startsWith(CB_STORY_ADMIN_NO_PREFIX)) {
+            handleAdminStoryDecision(cb, false);
         }
     }
 
@@ -520,16 +527,19 @@ public class FemdomBot extends TelegramLongPollingBot {
             sp.setPhoto(new InputFile("https://example.com/1.jpg"));
         }
 
+        // ✅ Зашитая ссылка: @Findom__Femdom_ -> https://t.me/+_406Bbw8k8EyYjJi
         String caption = """
-                🔥 В этом канале собраны самые лучшие Госпожи, чье присутствие будоражит, а влияние безгранично!
+               🔥 В этом канале собраны самые лучшие Госпожи, чье присутствие будоражит, а влияние безгранично! Это пространство, где формируются новые грани власти и рождается жгучее желание.
                 
-                ✅ Каждый профиль тщательно отобран и проверен. Все, кто публикуются, реальны.
+               ✅ Каждый представленный профиль тщательно отобран и проверен на реальность, подлинность силы и безупречность воздействия. Все, кто публикуются, реальны. Нам можно доверять!
                 
-                ➡️ Присоединяйся: @Findom__Femdom_
+               Погрузись в атмосферу, где каждая Госпожа — это произведение искусства соблазна и контроля. Открой для себя эксклюзивные грани смелых фантазий и позволь своим тайным желаниям говорить за тебя!
                 
-                Внимание: материал для публикации перед вами.
+               ➡️ Присоединяйся к миру истинного превосходства: <a href="https://t.me/+_406Bbw8k8EyYjJi">@Findom__Femdom_</a>
                 """;
+
         sp.setCaption(caption);
+        sp.setParseMode("HTML"); // ✅ важно для кликабельной ссылки
 
         InlineKeyboardButton done = new InlineKeyboardButton();
         done.setText("✅ Репост выполнен");
@@ -738,8 +748,12 @@ public class FemdomBot extends TelegramLongPollingBot {
             • ⚡ Моментальный пост
             • 📌 Моментальный пост + закреп на 3 дня
             • 🚀 Двойной эффект: Моментальный пост + История
-            • 📸 История
             Эти форматы выходят максимально быстро после подтверждения оплаты 🖤
+            
+            📸 История:
+            • Пользователь отправляет кружочек
+            • История попадает администратору на одобрение/отклонение
+            • Бот сам историю НЕ публикует и в очередь она НЕ встаёт
                 
             👑 VIP-пост:
             • Отдельная приоритетная очередь
@@ -843,7 +857,7 @@ public class FemdomBot extends TelegramLongPollingBot {
             🏦 Переведите на карту (<b>%s</b>):
             <code>%s</code>
             
-            ✅ После перевода нажмите <b>«Я оплатила»</b> — и мы отправим оплату на проверку модератору 🖤
+            ✅ После перевода нажмите <b>«Я оплатила»</b> — и мы продолжим 🖤
             """.formatted(escapeHtml(type.getTitle()), amount, escapeHtml(PAY_BANK_LABEL), PAY_CARD);
 
         InlineKeyboardButton paid = new InlineKeyboardButton();
@@ -875,7 +889,24 @@ public class FemdomBot extends TelegramLongPollingBot {
         u.state = UserState.WAIT_POST_CONTENT;
         db.saveUser(u);
 
-        // Пользователю
+        PostType type = PostType.valueOf(u.pendingPostType);
+
+        // ✅ НОВАЯ логика для "История": ждём кружочек, а потом отправим админу на Одобрить/Отклонить.
+        if (type == PostType.STORY) {
+            sendText(u.chatId, """
+                ✅ Благодарим! 🖤
+                
+                Теперь отправьте «Историю» кружочком (видеосообщение):
+                • именно кружочек (VideoNote)
+                • без текста/ссылок
+                
+                После получения мы отправим историю администратору на одобрение/отклонение ✨
+                """);
+            answerOk(cb);
+            return;
+        }
+
+        // Обычные посты — как было раньше:
         sendText(u.chatId, """
             ✅ Благодарим за оплату! 🖤
             
@@ -888,7 +919,6 @@ public class FemdomBot extends TelegramLongPollingBot {
             """);
 
         // Админам — заявка на проверку
-        PostType type = PostType.valueOf(u.pendingPostType);
         int amount = getPriceRub(type);
         String who = "@" + safeUsername(cb.getFrom());
         String timeMsk = LocalDateTime.now(MOSCOW_ZONE).format(MSK_TIME_FMT);
@@ -985,6 +1015,7 @@ public class FemdomBot extends TelegramLongPollingBot {
                 status = "QUEUED";
                 scheduledAt = estimateSchedule(type);
             } else {
+                // ✅ Важно: STORY больше не попадает сюда, т.к. для STORY мы не создаём PENDING_PAYMENT пост.
                 status = "INSTANT";
                 scheduledAt = LocalDateTime.now(MOSCOW_ZONE);
             }
@@ -1043,6 +1074,98 @@ public class FemdomBot extends TelegramLongPollingBot {
             return;
         }
 
+        PostType type = PostType.valueOf(u.pendingPostType);
+
+        // ✅ НОВАЯ логика "История": принимаем только кружочек и отправляем админу на Одобрить/Отклонить.
+        if (type == PostType.STORY) {
+            if (!msg.hasVideoNote()) {
+                sendText(u.chatId, "📸 Для тарифа «История» отправьте именно кружочек (видеосообщение).");
+                return;
+            }
+
+            String fileId = msg.getVideoNote().getFileId();
+
+            User tgUser = msg.getFrom();
+            String userTag = buildUserTag(tgUser);
+            String channelLink = (u.channelLink != null && !u.channelLink.isBlank()) ? u.channelLink : "не указан";
+
+            String timeMsk = LocalDateTime.now(MOSCOW_ZONE).format(MSK_TIME_FMT);
+            int amount = getPriceRub(PostType.STORY);
+
+            // Сохраняем как отдельный пост-историю (НЕ в очередь, НЕ публикуем воркером)
+            PostRecord p = new PostRecord();
+            p.chatId = u.chatId;
+            p.type = PostType.STORY;
+            p.mediaType = "VIDEONOTE";
+            p.mediaFileId = fileId;
+            p.caption = "STORY"; // служебно
+            p.queuePosition = 0;
+            p.scheduledAt = LocalDateTime.now(MOSCOW_ZONE);
+            p.status = "STORY_REVIEW"; // ✅ важно: воркер это не трогает
+
+            long storyPostId = db.savePostAndReturnId(p);
+
+            // Пользователю — подтверждение, что отправили админу
+            sendText(u.chatId, """
+                📩 История получена 🖤
+                
+                Сейчас отправляем её администратору на одобрение/отклонение.
+                """);
+
+            // Админу — карточка + кнопки
+            for (Long adminId : cfg.getAdmins()) {
+                String html = """
+                    📸 <b>История (кружочек) — модерация</b>
+                    
+                    ⏰ Время (МСК): <b>%s</b>
+                    👤 Пользователь: <b>%s</b>
+                    🆔 ChatID: <code>%d</code>
+                    🧾 Тариф: <b>%s</b>
+                    💰 Сумма: <b>%d ₽</b>
+                    ✨ Канал: <b>%s</b>
+                    💎 Личка: <b>%s</b>
+                    🆔 StoryID: <code>%d</code>
+                    """.formatted(
+                        escapeHtml(timeMsk),
+                        escapeHtml("@" + safeUsername(tgUser)),
+                        u.chatId,
+                        escapeHtml(PostType.STORY.getTitle()),
+                        amount,
+                        escapeHtml(channelLink),
+                        escapeHtml(userTag),
+                        storyPostId
+                );
+
+                InlineKeyboardButton ok = new InlineKeyboardButton();
+                ok.setText("✅ Одобрить");
+                ok.setCallbackData(CB_STORY_ADMIN_OK_PREFIX + storyPostId);
+
+                InlineKeyboardButton no = new InlineKeyboardButton();
+                no.setText("❌ Отклонить");
+                no.setCallbackData(CB_STORY_ADMIN_NO_PREFIX + storyPostId);
+
+                InlineKeyboardMarkup kb = new InlineKeyboardMarkup(List.of(List.of(ok, no)));
+                sendHtml(adminId, html, kb);
+
+                // отдельно отправляем сам кружочек
+                SendVideoNote vn = new SendVideoNote();
+                vn.setChatId(String.valueOf(adminId));
+                vn.setVideoNote(new InputFile(fileId));
+                execute(vn);
+            }
+
+            // ✅ сбрасываем процесс у пользователя (история не встаёт в очередь)
+            u.paymentApproved = false;
+            u.paymentClaimedAt = null;
+            u.pendingPostType = null;
+            u.state = UserState.VERIFIED;
+            db.saveUser(u);
+
+            return;
+        }
+
+        // --------- СТАРАЯ логика для остальных типов ---------
+
         if (!msg.hasPhoto() && !msg.hasVideo()) {
             sendText(u.chatId, "📎 Отправьте одно фото или одно видео с подписью одним сообщением.");
             return;
@@ -1076,15 +1199,7 @@ public class FemdomBot extends TelegramLongPollingBot {
         }
 
         User tgUser = msg.getFrom();
-        String username = tgUser != null ? tgUser.getUserName() : null;
-        String userTag;
-        if (username != null && !username.isBlank()) {
-            userTag = "@" + username;
-        } else if (tgUser != null) {
-            userTag = "id" + tgUser.getId();
-        } else {
-            userTag = "не указан";
-        }
+        String userTag = buildUserTag(tgUser);
 
         String channelLink = (u.channelLink != null && !u.channelLink.isBlank())
                 ? u.channelLink
@@ -1094,7 +1209,6 @@ public class FemdomBot extends TelegramLongPollingBot {
                 "✨Канал " + channelLink + "\n" +
                 "\uD83D\uDC8EЛичка " + userTag;
 
-        PostType type = PostType.valueOf(u.pendingPostType);
         boolean approved = u.paymentApproved;
 
         LocalDateTime scheduledAt = LocalDateTime.now(MOSCOW_ZONE);
@@ -1169,6 +1283,67 @@ public class FemdomBot extends TelegramLongPollingBot {
         }
     }
 
+    // ✅ НОВОЕ: решение админа по "Истории"
+    private void handleAdminStoryDecision(CallbackQuery cb, boolean approve) throws TelegramApiException {
+        long adminId = cb.getFrom().getId();
+        if (!cfg.getAdmins().contains(adminId)) {
+            AnswerCallbackQuery a = new AnswerCallbackQuery(cb.getId());
+            a.setText("⛔ Только администратор может использовать эту кнопку.");
+            a.setShowAlert(true);
+            execute(a);
+            return;
+        }
+
+        String data = cb.getData();
+        String prefix = approve ? CB_STORY_ADMIN_OK_PREFIX : CB_STORY_ADMIN_NO_PREFIX;
+
+        long storyId;
+        try {
+            storyId = Long.parseLong(data.substring(prefix.length()));
+        } catch (Exception e) {
+            answerOk(cb);
+            return;
+        }
+
+        PostRecord p = db.findPostById(storyId);
+        if (p == null) {
+            AnswerCallbackQuery a = new AnswerCallbackQuery(cb.getId());
+            a.setText("⚠️ История не найдена (возможно уже обработана).");
+            a.setShowAlert(true);
+            execute(a);
+            return;
+        }
+
+        if (approve) {
+            db.updatePostStatus(storyId, "STORY_APPROVED");
+
+            // ✅ обязательное уведомление клиента (как просили)
+            sendText(p.chatId, "✅ Ваша история одобрена, она поставлена в очередь.");
+
+            AnswerCallbackQuery a = new AnswerCallbackQuery(cb.getId());
+            a.setText("✅ Одобрено. Клиент уведомлён.");
+            execute(a);
+        } else {
+            db.updatePostStatus(storyId, "STORY_REJECTED");
+
+            // ✅ обязательное уведомление клиента
+            sendText(p.chatId, "❌ Ваша история отклонена.");
+
+            AnswerCallbackQuery a = new AnswerCallbackQuery(cb.getId());
+            a.setText("❌ Отклонено. Клиент уведомлён.");
+            execute(a);
+        }
+    }
+
+    private String buildUserTag(User tgUser) {
+        if (tgUser == null) return "не указан";
+        String username = tgUser.getUserName();
+        if (username != null && !username.isBlank()) return "@" + username;
+        return "id" + tgUser.getId();
+    }
+
+    // -------------------- Публикация воркером --------------------
+
     private void publishDuePosts() {
         long nowEpoch = Instant.now().getEpochSecond();
         List<PostRecord> due = db.findDuePostsForPublish(nowEpoch, 10);
@@ -1219,6 +1394,7 @@ public class FemdomBot extends TelegramLongPollingBot {
                 || type == PostType.INSTANT_PIN
                 || type == PostType.INSTANT_STORY
                 || type == PostType.STORY) {
+            // STORY тут не участвует в публикации воркером, но оставляем как было (не влияет).
             return nowMsk;
         }
 
@@ -1248,6 +1424,7 @@ public class FemdomBot extends TelegramLongPollingBot {
                 
                 • Вы получаете заявки на верификацию с кнопками «Одобрить» / «Отклонить».
                 • Вы получаете проверки оплат с кнопками «Подтвердить» / «Отклонить».
+                • Для «Истории» вы получаете кружочек с кнопками «Одобрить» / «Отклонить».
                 • Публикация постов может быть реализована отдельным воркером/cron из очереди БД.
                 """;
         sendText(chatId, text);
