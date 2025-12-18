@@ -529,13 +529,13 @@ public class FemdomBot extends TelegramLongPollingBot {
 
         // ✅ Зашитая ссылка: @Findom__Femdom_ -> https://t.me/+_406Bbw8k8EyYjJi
         String caption = """
-               🔥 В этом канале собраны самые лучшие Госпожи, чье присутствие будоражит, а влияние безгранично! Это пространство, где формируются новые грани власти и рождается жгучее желание.
+                🔥 В этом канале собраны самые лучшие Госпожи, чье присутствие будоражит, а влияние безгранично! Это пространство, где формируются новые грани власти и рождается жгучее желание.
                 
-               ✅ Каждый представленный профиль тщательно отобран и проверен на реальность, подлинность силы и безупречность воздействия. Все, кто публикуются, реальны. Нам можно доверять!
+                ✅ Каждый представленный профиль тщательно отобран и проверен на реальность, подлинность силы и безупречность воздействия. Все, кто публикуются, реальны. Нам можно доверять!
                 
-               Погрузись в атмосферу, где каждая Госпожа — это произведение искусства соблазна и контроля. Открой для себя эксклюзивные грани смелых фантазий и позволь своим тайным желаниям говорить за тебя!
+                Погрузись в атмосферу, где каждая Госпожа — это произведение искусства соблазна и контроля. Открой для себя эксклюзивные грани смелых фантазий и позволь своим тайным желаниям говорить за тебя!
                 
-               ➡️ Присоединяйся к миру истинного превосходства: <a href="https://t.me/+_406Bbw8k8EyYjJi">@Findom__Femdom_</a>
+                ➡️ Присоединяйся к миру истинного превосходства: <a href="https://t.me/+_406Bbw8k8EyYjJi">@Findom__Femdom_</a>
                 """;
 
         sp.setCaption(caption);
@@ -742,26 +742,26 @@ public class FemdomBot extends TelegramLongPollingBot {
 
     private void sendPublicationRules(long chatId) throws TelegramApiException {
         String rules = """
-            📅 Правила и график публикации постов
+                📅 Правила и график публикации постов
                 
-            ⏱ Моментальные форматы:
-            • ⚡ Моментальный пост
-            • 📌 Моментальный пост + закреп на 3 дня
-            • 🚀 Двойной эффект: Моментальный пост + История
-            Эти форматы выходят максимально быстро после подтверждения оплаты 🖤
-            
-            📸 История:
-            • Пользователь отправляет кружочек
-            • История попадает администратору на одобрение/отклонение
-            • Бот сам историю НЕ публикует и в очередь она НЕ встаёт
+                ⏱ Моментальные форматы:
+                • ⚡ Моментальный пост
+                • 📌 Моментальный пост + закреп на 3 дня
+                • 🚀 Двойной эффект: Моментальный пост + История
+                Эти форматы выходят максимально быстро после подтверждения оплаты 🖤
                 
-            👑 VIP-пост:
-            • Отдельная приоритетная очередь
-            • Каждый день в 20:00 по Москве публикуется 1 VIP-пост
+                📸 История:
+                • Пользователь отправляет одно фото или одно видео + текст
+                • История попадает администратору на одобрение/отклонение
+                • В случае одобрения, пост попадает в историю.
                 
-            ✨ Стандартный пост:
-            • Публикуется в 20:00 по Москве, если на день нет VIP-поста
-            """;
+                👑 VIP-пост:
+                • Отдельная приоритетная очередь
+                • Каждый день в 20:00 по Москве публикуется 1 VIP-пост
+                
+                ✨ Стандартный пост:
+                • Публикуется в 20:00 по Москве, если на день нет VIP-поста
+                """;
 
         InlineKeyboardButton back = new InlineKeyboardButton();
         back.setText("🏠 В главное меню");
@@ -776,15 +776,15 @@ public class FemdomBot extends TelegramLongPollingBot {
 
     private void sendTariffsInfo(long chatId) throws TelegramApiException {
         String tariffs = """
-            💎 Тарифы размещения:
-            
-            • ⚡ Моментальный пост: 900 ₽
-            • 📌 Моментальный пост + закреп на 3 дня: 1100 ₽
-            • 🚀 Двойной эффект (пост + история): 1300 ₽
-            • 📸 История: 500 ₽
-            • 👑 VIP-пост: 600 ₽
-            • ✨ Стандартный пост: 400 ₽
-            """;
+                💎 Тарифы размещения:
+                
+                • ⚡ Моментальный пост: 900 ₽
+                • 📌 Моментальный пост + закреп на 3 дня: 1100 ₽
+                • 🚀 Двойной эффект (пост + история): 1300 ₽
+                • 📸 История: 500 ₽
+                • 👑 VIP-пост: 600 ₽
+                • ✨ Стандартный пост: 400 ₽
+                """;
 
         InlineKeyboardButton back = new InlineKeyboardButton();
         back.setText("🏠 В главное меню");
@@ -803,10 +803,10 @@ public class FemdomBot extends TelegramLongPollingBot {
         // если уже идёт процесс
         if (u.state == UserState.WAIT_PAYMENT_REVIEW) {
             sendText(u.chatId, """
-            ⏳ Ваш пост уже отправлен и ожидает подтверждения оплаты модератором 🖤
-            
-            Когда оплату подтвердят — вы сможете оформить новое размещение ✨
-            """);
+                    ⏳ Ваш пост уже отправлен и ожидает подтверждения оплаты модератором 🖤
+                    
+                    Когда оплату подтвердят — вы сможете оформить новое размещение ✨
+                    """);
             answerOk(cb);
             return;
         }
@@ -849,16 +849,16 @@ public class FemdomBot extends TelegramLongPollingBot {
         int amount = getPriceRub(type);
 
         String html = """
-            💳 <b>Оплата размещения</b> ✨
-            
-            🧾 Тариф: <b>%s</b>
-            💰 Сумма к переводу: <b>%d ₽</b>
-            
-            🏦 Переведите на карту (<b>%s</b>):
-            <code>%s</code>
-            
-            ✅ После перевода нажмите <b>«Я оплатила»</b> — и мы продолжим 🖤
-            """.formatted(escapeHtml(type.getTitle()), amount, escapeHtml(PAY_BANK_LABEL), PAY_CARD);
+                💳 <b>Оплата размещения</b> ✨
+                
+                🧾 Тариф: <b>%s</b>
+                💰 Сумма к переводу: <b>%d ₽</b>
+                
+                🏦 Переведите на карту (<b>%s</b>):
+                <code>%s</code>
+                
+                ✅ После перевода нажмите <b>«Я оплатила»</b> — и мы продолжим 🖤
+                """.formatted(escapeHtml(type.getTitle()), amount, escapeHtml(PAY_BANK_LABEL), PAY_CARD);
 
         InlineKeyboardButton paid = new InlineKeyboardButton();
         paid.setText("✅ Я оплатила");
@@ -894,29 +894,30 @@ public class FemdomBot extends TelegramLongPollingBot {
         // ✅ НОВАЯ логика для "История": ждём кружочек, а потом отправим админу на Одобрить/Отклонить.
         if (type == PostType.STORY) {
             sendText(u.chatId, """
-                ✅ Благодарим! 🖤
-                
-                Теперь отправьте «Историю» кружочком (видеосообщение):
-                • именно кружочек (VideoNote)
-                • без текста/ссылок
-                
-                После получения мы отправим историю администратору на одобрение/отклонение ✨
-                """);
+                    ✅ Благодарим! 🖤
+                    
+                    Теперь отправьте «Историю»:
+                    • одно фото или одно видео + текст (подпись) в одном сообщении
+                    • текст до 300 символов
+                    • без ссылок/контактов — мы добавим канал и личку автоматически
+                    
+                    После получения мы отправим историю администратору на одобрение/отклонение ✨
+                    """);
             answerOk(cb);
             return;
         }
 
         // Обычные посты — как было раньше:
         sendText(u.chatId, """
-            ✅ Благодарим за оплату! 🖤
-            
-            🕵️‍♀️ После проверки перевода модератором ваш пост появится в очереди ✨
-            
-            📩 Теперь отправьте материал для публикации:
-            • Одно фото или одно видео + текст (подпись) в одном сообщении
-            • Текст до 300 символов
-            • Без ссылок/контактов — мы добавим их автоматически
-            """);
+                ✅ Благодарим за оплату! 🖤
+                
+                🕵️‍♀️ После проверки перевода модератором ваш пост появится в очереди ✨
+                
+                📩 Теперь отправьте материал для публикации:
+                • Одно фото или одно видео + текст (подпись) в одном сообщении
+                • Текст до 300 символов
+                • Без ссылок/контактов — мы добавим их автоматически
+                """);
 
         // Админам — заявка на проверку
         int amount = getPriceRub(type);
@@ -925,14 +926,14 @@ public class FemdomBot extends TelegramLongPollingBot {
 
         for (Long adminId : cfg.getAdmins()) {
             String html = """
-                💸 <b>Проверка оплаты</b>
-                
-                ⏰ Время (МСК): <b>%s</b>
-                👤 Пользователь: <b>%s</b>
-                🆔 ChatID: <code>%d</code>
-                🧾 Тариф: <b>%s</b>
-                💰 Сумма: <b>%d ₽</b>
-                """.formatted(
+                    💸 <b>Проверка оплаты</b>
+                    
+                    ⏰ Время (МСК): <b>%s</b>
+                    👤 Пользователь: <b>%s</b>
+                    🆔 ChatID: <code>%d</code>
+                    🧾 Тариф: <b>%s</b>
+                    💰 Сумма: <b>%d ₽</b>
+                    """.formatted(
                     escapeHtml(timeMsk),
                     escapeHtml(who),
                     u.chatId,
@@ -986,10 +987,10 @@ public class FemdomBot extends TelegramLongPollingBot {
             }
 
             sendText(userChatId, """
-                ❌ Платёж не подтверждён
-                
-                Возможно, перевод ещё не дошёл или сумма/данные не совпали.
-                """);
+                    ❌ Платёж не подтверждён
+                    
+                    Возможно, перевод ещё не дошёл или сумма/данные не совпали.
+                    """);
 
             AnswerCallbackQuery a = new AnswerCallbackQuery(cb.getId());
             a.setText("❌ Отклонено. Пользователь уведомлён.");
@@ -1030,19 +1031,19 @@ public class FemdomBot extends TelegramLongPollingBot {
             db.saveUser(u);
 
             sendText(userChatId, """
-                ✅ Оплата подтверждена! 🖤
-                
-                Ваш пост принят и поставлен в очередь на публикацию ✨
-                """);
+                    ✅ Оплата подтверждена! 🖤
+                    
+                    Ваш пост принят и поставлен в очередь на публикацию ✨
+                    """);
         } else {
             // контента ещё нет
             sendText(userChatId, """
-                ✅ Оплата подтверждена! 🖤
-                
-                Теперь отправьте материал для публикации:
-                • Одно фото или одно видео + подпись одним сообщением
-                • Без ссылок/контактов ✨
-                """);
+                    ✅ Оплата подтверждена! 🖤
+                    
+                    Теперь отправьте материал для публикации:
+                    • Одно фото или одно видео + подпись одним сообщением
+                    • Без ссылок/контактов ✨
+                    """);
 
             u.state = UserState.WAIT_POST_CONTENT;
             db.saveUser(u);
@@ -1076,56 +1077,89 @@ public class FemdomBot extends TelegramLongPollingBot {
 
         PostType type = PostType.valueOf(u.pendingPostType);
 
-        // ✅ НОВАЯ логика "История": принимаем только кружочек и отправляем админу на Одобрить/Отклонить.
+        // ✅ "История": принимаем ОДНО фото ИЛИ ОДНО видео + ТЕКСТ (подпись) и добавляем канал/личку автоматически
         if (type == PostType.STORY) {
-            if (!msg.hasVideoNote()) {
-                sendText(u.chatId, "📸 Для тарифа «История» отправьте именно кружочек (видеосообщение).");
+
+            if (!msg.hasPhoto() && !msg.hasVideo()) {
+                sendText(u.chatId, "📸 Для тарифа «История» отправьте одно фото или одно видео с подписью одним сообщением.");
                 return;
             }
 
-            String fileId = msg.getVideoNote().getFileId();
+            String caption = msg.getCaption();
+            if (caption == null || caption.isBlank()) {
+                sendText(u.chatId, "✍️ Пожалуйста, добавьте текст к вашей истории (подпись).");
+                return;
+            }
+            if (caption.length() > 300) {
+                sendText(u.chatId, "⚠️ Текст слишком длинный. Максимум 300 символов.");
+                return;
+            }
+            if (caption.matches("(?i).*(t\\.me|https?://|@).*")) {
+                sendText(u.chatId, "⚠️ Пожалуйста, не указывайте ссылки/контакты в тексте. Мы добавим их автоматически.");
+                return;
+            }
+
+            String fileId;
+            String mediaType;
+
+            if (msg.hasPhoto()) {
+                List<PhotoSize> photos = msg.getPhoto();
+                PhotoSize largest = photos.get(photos.size() - 1);
+                fileId = largest.getFileId();
+                mediaType = "PHOTO";
+            } else {
+                fileId = msg.getVideo().getFileId();
+                mediaType = "VIDEO";
+            }
 
             User tgUser = msg.getFrom();
             String userTag = buildUserTag(tgUser);
-            String channelLink = (u.channelLink != null && !u.channelLink.isBlank()) ? u.channelLink : "не указан";
+
+            String channelLink = (u.channelLink != null && !u.channelLink.isBlank())
+                    ? u.channelLink
+                    : "не указан";
+
+            // ✅ Автоподстановка, как у обычных постов
+            String finalCaption = caption + "\n\n" +
+                    "✨Канал " + channelLink + "\n" +
+                    "\uD83D\uDC8EЛичка " + userTag;
 
             String timeMsk = LocalDateTime.now(MOSCOW_ZONE).format(MSK_TIME_FMT);
             int amount = getPriceRub(PostType.STORY);
 
-            // Сохраняем как отдельный пост-историю (НЕ в очередь, НЕ публикуем воркером)
+            // Сохраняем как отдельную историю (НЕ в очередь воркера)
             PostRecord p = new PostRecord();
             p.chatId = u.chatId;
             p.type = PostType.STORY;
-            p.mediaType = "VIDEONOTE";
+            p.mediaType = mediaType;
             p.mediaFileId = fileId;
-            p.caption = "STORY"; // служебно
+            p.caption = finalCaption;          // ✅ теперь реальная подпись
             p.queuePosition = 0;
             p.scheduledAt = LocalDateTime.now(MOSCOW_ZONE);
-            p.status = "STORY_REVIEW"; // ✅ важно: воркер это не трогает
+            p.status = "STORY_REVIEW";
 
             long storyPostId = db.savePostAndReturnId(p);
 
-            // Пользователю — подтверждение, что отправили админу
             sendText(u.chatId, """
-                📩 История получена 🖤
-                
-                Сейчас отправляем её администратору на одобрение/отклонение.
-                """);
+        📩 История получена 🖤
+        
+        Сейчас отправляем её администратору на одобрение/отклонение.
+        """);
 
-            // Админу — карточка + кнопки
+            // Админу — карточка + кнопки + сам медиа-файл С подписью
             for (Long adminId : cfg.getAdmins()) {
                 String html = """
-                    📸 <b>История (кружочек) — модерация</b>
-                    
-                    ⏰ Время (МСК): <b>%s</b>
-                    👤 Пользователь: <b>%s</b>
-                    🆔 ChatID: <code>%d</code>
-                    🧾 Тариф: <b>%s</b>
-                    💰 Сумма: <b>%d ₽</b>
-                    ✨ Канал: <b>%s</b>
-                    💎 Личка: <b>%s</b>
-                    🆔 StoryID: <code>%d</code>
-                    """.formatted(
+            📸 <b>История — модерация</b>
+            
+            ⏰ Время (МСК): <b>%s</b>
+            👤 Пользователь: <b>%s</b>
+            🆔 ChatID: <code>%d</code>
+            🧾 Тариф: <b>%s</b>
+            💰 Сумма: <b>%d ₽</b>
+            ✨ Канал: <b>%s</b>
+            💎 Личка: <b>%s</b>
+            🆔 StoryID: <code>%d</code>
+            """.formatted(
                         escapeHtml(timeMsk),
                         escapeHtml("@" + safeUsername(tgUser)),
                         u.chatId,
@@ -1147,14 +1181,22 @@ public class FemdomBot extends TelegramLongPollingBot {
                 InlineKeyboardMarkup kb = new InlineKeyboardMarkup(List.of(List.of(ok, no)));
                 sendHtml(adminId, html, kb);
 
-                // отдельно отправляем сам кружочек
-                SendVideoNote vn = new SendVideoNote();
-                vn.setChatId(String.valueOf(adminId));
-                vn.setVideoNote(new InputFile(fileId));
-                execute(vn);
+                if ("VIDEO".equalsIgnoreCase(mediaType)) {
+                    SendVideo sv = new SendVideo();
+                    sv.setChatId(String.valueOf(adminId));
+                    sv.setVideo(new InputFile(fileId));
+                    sv.setCaption(finalCaption); // ✅ подпись с каналом/личкой
+                    execute(sv);
+                } else {
+                    SendPhoto sp = new SendPhoto();
+                    sp.setChatId(String.valueOf(adminId));
+                    sp.setPhoto(new InputFile(fileId));
+                    sp.setCaption(finalCaption); // ✅ подпись с каналом/личкой
+                    execute(sp);
+                }
             }
 
-            // ✅ сбрасываем процесс у пользователя (история не встаёт в очередь)
+            // ✅ сбрасываем процесс у пользователя
             u.paymentApproved = false;
             u.paymentClaimedAt = null;
             u.pendingPostType = null;
@@ -1163,8 +1205,6 @@ public class FemdomBot extends TelegramLongPollingBot {
 
             return;
         }
-
-        // --------- СТАРАЯ логика для остальных типов ---------
 
         if (!msg.hasPhoto() && !msg.hasVideo()) {
             sendText(u.chatId, "📎 Отправьте одно фото или одно видео с подписью одним сообщением.");
@@ -1275,11 +1315,11 @@ public class FemdomBot extends TelegramLongPollingBot {
             db.saveUser(u);
 
             sendText(u.chatId, """
-                📩 Материал получен! Спасибо 🖤
-                
-                ⏳ Сейчас ждём подтверждение оплаты модератором.
-                Как только подтвердят — ваш пост появится в очереди ✨
-                """);
+                    📩 Материал получен! Спасибо 🖤
+                    
+                    ⏳ Сейчас ждём подтверждение оплаты модератором.
+                    Как только подтвердят — ваш пост появится в очереди ✨
+                    """);
         }
     }
 
@@ -1318,7 +1358,19 @@ public class FemdomBot extends TelegramLongPollingBot {
             db.updatePostStatus(storyId, "STORY_APPROVED");
 
             // ✅ обязательное уведомление клиента (как просили)
-            sendText(p.chatId, "✅ Ваша история одобрена, она поставлена в очередь.");
+            InlineKeyboardButton back = new InlineKeyboardButton();
+            back.setText("⬅️ Вернуться в меню");
+            back.setCallbackData("MAIN_MENU");
+
+            InlineKeyboardMarkup kb = new InlineKeyboardMarkup(List.of(List.of(back)));
+
+            SendMessage smUser = new SendMessage(String.valueOf(p.chatId),
+                    approve
+                            ? "✅ Ваша история одобрена, она поставлена в очередь."
+                            : "❌ Ваша история отклонена."
+            );
+            smUser.setReplyMarkup(kb);
+            execute(smUser);
 
             AnswerCallbackQuery a = new AnswerCallbackQuery(cb.getId());
             a.setText("✅ Одобрено. Клиент уведомлён.");
@@ -1327,7 +1379,19 @@ public class FemdomBot extends TelegramLongPollingBot {
             db.updatePostStatus(storyId, "STORY_REJECTED");
 
             // ✅ обязательное уведомление клиента
-            sendText(p.chatId, "❌ Ваша история отклонена.");
+            InlineKeyboardButton back = new InlineKeyboardButton();
+            back.setText("⬅️ Вернуться в меню");
+            back.setCallbackData("MAIN_MENU");
+
+            InlineKeyboardMarkup kb = new InlineKeyboardMarkup(List.of(List.of(back)));
+
+            SendMessage smUser = new SendMessage(String.valueOf(p.chatId),
+                    approve
+                            ? "✅ Ваша история одобрена, она поставлена в очередь."
+                            : "❌ Ваша история отклонена."
+            );
+            smUser.setReplyMarkup(kb);
+            execute(smUser);
 
             AnswerCallbackQuery a = new AnswerCallbackQuery(cb.getId());
             a.setText("❌ Отклонено. Клиент уведомлён.");
@@ -1424,7 +1488,7 @@ public class FemdomBot extends TelegramLongPollingBot {
                 
                 • Вы получаете заявки на верификацию с кнопками «Одобрить» / «Отклонить».
                 • Вы получаете проверки оплат с кнопками «Подтвердить» / «Отклонить».
-                • Для «Истории» вы получаете кружочек с кнопками «Одобрить» / «Отклонить».
+                • Для «Истории» вы получаете фото/видео с кнопками «Одобрить» / «Отклонить».
                 • Публикация постов может быть реализована отдельным воркером/cron из очереди БД.
                 """;
         sendText(chatId, text);
