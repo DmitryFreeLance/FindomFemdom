@@ -280,23 +280,23 @@ public class FemdomBot extends TelegramLongPollingBot {
                 "📅 Текущее время сервера: " + nowMsk.format(MSK_HM_FMT) + "\n\n" +
                 "👉 Выберите ближайшее свободное место ниже:";
 
-        List<InlineKeyboardButton> row = new ArrayList<>();
+        // ✅ каждая кнопка на отдельной строке
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (int i = 0; i < 4; i++) {
             LocalDate d = start.plusDays(i);
             InlineKeyboardButton b = new InlineKeyboardButton();
             b.setText("🗓️ " + d.format(DATE_FMT));
             b.setCallbackData(CB_PICK_DT_DATE_PREFIX + d); // yyyy-MM-dd
-            row.add(b);
+            rows.add(List.of(b));
         }
 
-        InlineKeyboardButton backToTariffs = new InlineKeyboardButton();
-        backToTariffs.setText("⬅️ К тарифам");
-        backToTariffs.setCallbackData("SHOW_TARIFFS");
+        // ✅ К тарифам -> отправлять sendMainMenu (callback MAIN_MENU)
+        InlineKeyboardButton backToMenu = new InlineKeyboardButton();
+        backToMenu.setText("⬅️ К тарифам");
+        backToMenu.setCallbackData("MAIN_MENU");
+        rows.add(List.of(backToMenu));
 
-        InlineKeyboardMarkup kb = new InlineKeyboardMarkup(List.of(
-                row,
-                List.of(backToTariffs)
-        ));
+        InlineKeyboardMarkup kb = new InlineKeyboardMarkup(rows);
 
         SendMessage sm = new SendMessage(String.valueOf(u.chatId), text);
         sm.setReplyMarkup(kb);
