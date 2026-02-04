@@ -10,8 +10,15 @@ public enum UserState {
     WAIT_ADMIN_APPROVAL,
     VERIFIED,
     BANNED,
+
+    // постинг
     WAIT_POST_CONTENT,
 
-    WAIT_PAYMENT,          // 👈 ждём перевод и кнопку "Я оплатила"
-    WAIT_PAYMENT_REVIEW    // 👈 контент получен, ждём проверки админом
+    // оплата
+    WAIT_PAYMENT,          // ждём перевод и кнопку "Я оплатила"
+    WAIT_PAYMENT_REVIEW,   // контент получен, ждём проверки админом
+
+    // ✅ НОВОЕ: выбор даты/времени
+    WAIT_SCHEDULE_DATE,
+    WAIT_SCHEDULE_TIME
 }

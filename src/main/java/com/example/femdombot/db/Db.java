@@ -4,9 +4,7 @@ import com.example.femdombot.model.PostType;
 import com.example.femdombot.model.UserState;
 
 import java.sql.*;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.*;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -60,11 +58,18 @@ public class Db {
             try { st.executeUpdate("ALTER TABLE users ADD COLUMN payment_approved INTEGER DEFAULT 0"); } catch (SQLException ignored) {}
             try { st.executeUpdate("ALTER TABLE users ADD COLUMN payment_claimed_at INTEGER"); } catch (SQLException ignored) {}
 
+            // ✅ НОВОЕ: выбор даты/времени
+            try { st.executeUpdate("ALTER TABLE users ADD COLUMN pending_scheduled_at INTEGER"); } catch (SQLException ignored) {}
+            try { st.executeUpdate("ALTER TABLE users ADD COLUMN pending_amount_rub INTEGER"); } catch (SQLException ignored) {}
+
             // --- Миграции posts ---
             try { st.executeUpdate("ALTER TABLE posts ADD COLUMN media_type TEXT"); } catch (SQLException ignored) {}
             try { st.executeUpdate("ALTER TABLE posts ADD COLUMN published_message_id INTEGER"); } catch (SQLException ignored) {}
             try { st.executeUpdate("ALTER TABLE posts ADD COLUMN published_at INTEGER"); } catch (SQLException ignored) {}
             try { st.executeUpdate("ALTER TABLE posts ADD COLUMN last_error TEXT"); } catch (SQLException ignored) {}
+
+            // ✅ НОВОЕ: сумма в рублях
+            try { st.executeUpdate("ALTER TABLE posts ADD COLUMN amount_rub INTEGER"); } catch (SQLException ignored) {}
 
         } catch (SQLException e) {
             throw new RuntimeException("DB init error", e);
@@ -83,7 +88,9 @@ public class Db {
                     SELECT chat_id, state, verified, attempts_left,
                            verification_started_at, channel_link,
                            verification_video_file_id, pending_post_type,
-                           last_start_at, last_callback_at, payment_approved, payment_claimed_at
+                           last_start_at, last_callback_at,
+                           payment_approved, payment_claimed_at,
+                           pending_scheduled_at, pending_amount_rub
                     FROM users WHERE chat_id = ?
                     """)) {
                 ps.setLong(1, chatId);
@@ -114,6 +121,12 @@ public class Db {
                         long pca = rs.getLong("payment_claimed_at");
                         u.paymentClaimedAt = rs.wasNull() ? null : pca;
 
+                        long psa = rs.getLong("pending_scheduled_at");
+                        u.pendingScheduledAtEpochSec = rs.wasNull() ? null : psa;
+
+                        int amt = rs.getInt("pending_amount_rub");
+                        u.pendingAmountRub = rs.wasNull() ? null : amt;
+
                         return u;
                     }
                 }
@@ -135,7 +148,8 @@ public class Db {
                       verification_started_at = ?, channel_link = ?,
                       verification_video_file_id = ?, pending_post_type = ?,
                       last_start_at = ?, last_callback_at = ?,
-                      payment_approved = ?, payment_claimed_at = ?
+                      payment_approved = ?, payment_claimed_at = ?,
+                      pending_scheduled_at = ?, pending_amount_rub = ?
                     WHERE chat_id = ?
                     """;
 
@@ -158,14 +172,18 @@ public class Db {
                 if (u.lastCallbackAt == null) ps.setNull(9, Types.BIGINT);
                 else ps.setLong(9, u.lastCallbackAt);
 
-                // ✅ FIX: параметр 10 — payment_approved (а не chatId)
                 ps.setInt(10, u.paymentApproved ? 1 : 0);
 
                 if (u.paymentClaimedAt == null) ps.setNull(11, Types.BIGINT);
                 else ps.setLong(11, u.paymentClaimedAt);
 
-                // ✅ WHERE chat_id = ?
-                ps.setLong(12, u.chatId);
+                if (u.pendingScheduledAtEpochSec == null) ps.setNull(12, Types.BIGINT);
+                else ps.setLong(12, u.pendingScheduledAtEpochSec);
+
+                if (u.pendingAmountRub == null) ps.setNull(13, Types.INTEGER);
+                else ps.setInt(13, u.pendingAmountRub);
+
+                ps.setLong(14, u.chatId);
 
                 updated = ps.executeUpdate();
             }
@@ -177,8 +195,9 @@ public class Db {
                          verification_started_at, channel_link,
                          verification_video_file_id, pending_post_type,
                          last_start_at, last_callback_at,
-                         payment_approved, payment_claimed_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         payment_approved, payment_claimed_at,
+                         pending_scheduled_at, pending_amount_rub)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """;
                 try (PreparedStatement ps = c.prepareStatement(insert)) {
                     ps.setLong(1, u.chatId);
@@ -204,6 +223,12 @@ public class Db {
                     if (u.paymentClaimedAt == null) ps.setNull(12, Types.BIGINT);
                     else ps.setLong(12, u.paymentClaimedAt);
 
+                    if (u.pendingScheduledAtEpochSec == null) ps.setNull(13, Types.BIGINT);
+                    else ps.setLong(13, u.pendingScheduledAtEpochSec);
+
+                    if (u.pendingAmountRub == null) ps.setNull(14, Types.INTEGER);
+                    else ps.setInt(14, u.pendingAmountRub);
+
                     ps.executeUpdate();
                 }
             }
@@ -217,7 +242,8 @@ public class Db {
     public PostRecord findLatestPendingPost(long chatId) {
         try (Connection c = getConnection();
              PreparedStatement ps = c.prepareStatement("""
-             SELECT id, chat_id, type, media_type, media_file_id, caption, status, queue_position, scheduled_at
+             SELECT id, chat_id, type, media_type, media_file_id, caption, status,
+                    queue_position, scheduled_at, amount_rub
              FROM posts
              WHERE chat_id = ? AND status = 'PENDING_PAYMENT'
              ORDER BY id DESC
@@ -236,6 +262,13 @@ public class Db {
                 p.caption = rs.getString("caption");
                 p.status = rs.getString("status");
                 p.queuePosition = rs.getInt("queue_position");
+
+                long epoch = rs.getLong("scheduled_at");
+                p.scheduledAt = Instant.ofEpochSecond(epoch).atZone(MOSCOW_ZONE).toLocalDateTime();
+
+                int amt = rs.getInt("amount_rub");
+                p.amountRub = rs.wasNull() ? null : amt;
+
                 return p;
             }
         } catch (SQLException e) {
@@ -299,8 +332,8 @@ public class Db {
              PreparedStatement ps = c.prepareStatement("""
                      INSERT INTO posts
                        (chat_id, type, media_type, media_file_id, caption,
-                        status, queue_position, scheduled_at)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        status, queue_position, scheduled_at, amount_rub)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                      """)) {
             ps.setLong(1, p.chatId);
             ps.setString(2, p.type.name());
@@ -310,10 +343,11 @@ public class Db {
             ps.setString(6, p.status);
             ps.setInt(7, p.queuePosition);
 
-            long epoch = p.scheduledAt
-                    .atZone(MOSCOW_ZONE)
-                    .toEpochSecond();
+            long epoch = p.scheduledAt.atZone(MOSCOW_ZONE).toEpochSecond();
             ps.setLong(8, epoch);
+
+            if (p.amountRub == null) ps.setNull(9, Types.INTEGER);
+            else ps.setInt(9, p.amountRub);
 
             ps.executeUpdate();
         } catch (SQLException e) {
@@ -338,13 +372,32 @@ public class Db {
         }
     }
 
+    // ✅ НОВОЕ: очередь "моментальных" (и синхронизированных с ними SCHEDULED_TIME)
+    public int countInstantLikeQueue() {
+        try (Connection c = getConnection();
+             PreparedStatement ps = c.prepareStatement("""
+                     SELECT COUNT(*)
+                     FROM posts
+                     WHERE status IN ('INSTANT','PUBLISHING')
+                       AND type IN ('INSTANT','INSTANT_PIN','INSTANT_STORY','SCHEDULED_TIME')
+                     """)) {
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getInt(1);
+            }
+            return 0;
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     // ---------- ПУБЛИКАЦИЯ (для воркера) ----------
 
     public List<PostRecord> findDuePostsForPublish(long nowEpochSeconds, int limit) {
         List<PostRecord> out = new ArrayList<>();
         try (Connection c = getConnection();
              PreparedStatement ps = c.prepareStatement("""
-                 SELECT id, chat_id, type, media_type, media_file_id, caption, status, queue_position, scheduled_at
+                 SELECT id, chat_id, type, media_type, media_file_id, caption, status,
+                        queue_position, scheduled_at, amount_rub
                  FROM posts
                  WHERE status IN ('INSTANT','QUEUED') AND scheduled_at <= ?
                  ORDER BY scheduled_at ASC, queue_position ASC, id ASC
@@ -368,6 +421,9 @@ public class Db {
                     long epoch = rs.getLong("scheduled_at");
                     p.scheduledAt = Instant.ofEpochSecond(epoch).atZone(MOSCOW_ZONE).toLocalDateTime();
 
+                    int amt = rs.getInt("amount_rub");
+                    p.amountRub = rs.wasNull() ? null : amt;
+
                     out.add(p);
                 }
             }
@@ -377,7 +433,6 @@ public class Db {
         return out;
     }
 
-    // atomic-lock от дублей: переводим в PUBLISHING
     public boolean markPostPublishing(long postId) {
         try (Connection c = getConnection();
              PreparedStatement ps = c.prepareStatement("""
@@ -434,14 +489,13 @@ public class Db {
         }
     }
 
-    // ✅ НОВОЕ: сохранить пост и вернуть его ID (нужно для STORY модерации по postId)
     public long savePostAndReturnId(PostRecord p) {
         try (Connection c = getConnection();
              PreparedStatement ps = c.prepareStatement("""
                  INSERT INTO posts
                    (chat_id, type, media_type, media_file_id, caption,
-                    status, queue_position, scheduled_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    status, queue_position, scheduled_at, amount_rub)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                  """, Statement.RETURN_GENERATED_KEYS)) {
 
             ps.setLong(1, p.chatId);
@@ -455,6 +509,9 @@ public class Db {
             long epoch = p.scheduledAt.atZone(MOSCOW_ZONE).toEpochSecond();
             ps.setLong(8, epoch);
 
+            if (p.amountRub == null) ps.setNull(9, Types.INTEGER);
+            else ps.setInt(9, p.amountRub);
+
             ps.executeUpdate();
 
             try (ResultSet rs = ps.getGeneratedKeys()) {
@@ -465,7 +522,6 @@ public class Db {
                 }
             }
 
-            // fallback для sqlite (на всякий)
             try (Statement st = c.createStatement();
                  ResultSet rs = st.executeQuery("SELECT last_insert_rowid()")) {
                 if (rs.next()) {
@@ -481,11 +537,11 @@ public class Db {
         }
     }
 
-    // ✅ НОВОЕ: найти пост по ID (нужно для решения админа по STORY)
     public PostRecord findPostById(long postId) {
         try (Connection c = getConnection();
              PreparedStatement ps = c.prepareStatement("""
-             SELECT id, chat_id, type, media_type, media_file_id, caption, status, queue_position, scheduled_at
+             SELECT id, chat_id, type, media_type, media_file_id, caption, status,
+                    queue_position, scheduled_at, amount_rub
              FROM posts
              WHERE id = ?
              LIMIT 1
@@ -507,6 +563,9 @@ public class Db {
                 long epoch = rs.getLong("scheduled_at");
                 p.scheduledAt = Instant.ofEpochSecond(epoch).atZone(MOSCOW_ZONE).toLocalDateTime();
 
+                int amt = rs.getInt("amount_rub");
+                p.amountRub = rs.wasNull() ? null : amt;
+
                 return p;
             }
         } catch (SQLException e) {
@@ -514,7 +573,6 @@ public class Db {
         }
     }
 
-    // ✅ НОВОЕ: обновить только статус поста (для STORY)
     public void updatePostStatus(long postId, String status) {
         try (Connection c = getConnection();
              PreparedStatement ps = c.prepareStatement("""

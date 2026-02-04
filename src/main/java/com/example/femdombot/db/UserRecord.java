@@ -15,9 +15,14 @@ public class UserRecord {
     public Long lastStartAt;
     public Long lastCallbackAt;
 
-    // 👇 НОВОЕ (для ручной оплаты)
+    // ручная оплата
     public boolean paymentApproved = false;     // админ подтвердил оплату
     public Long paymentClaimedAt;               // когда пользователь нажал "Я оплатила" (epoch millis)
+
+    // ✅ НОВОЕ: выбранная дата/время и сумма (для "Выбрать дату и время")
+    // хранится как epoch seconds (MSK) для стабильности между рестартами
+    public Long pendingScheduledAtEpochSec;     // выбранный слот публикации
+    public Integer pendingAmountRub;            // цена выбранного слота
 
     public UserRecord(long chatId) {
         this.chatId = chatId;

@@ -20,9 +20,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.io.InputStream;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.*;
@@ -40,6 +38,12 @@ public class FemdomBot extends TelegramLongPollingBot {
     private static final String CB_PAY_BACK = "PAY_BACK";
     private static final String CB_PAY_ADMIN_OK_PREFIX = "PAY_ADMIN_OK:";
     private static final String CB_PAY_ADMIN_NO_PREFIX = "PAY_ADMIN_NO:";
+    // ✅ НОВОЕ: выбор даты и времени (синхронизировано с моментальными постами)
+    private static final String CB_PICK_DT_START = "PICK_DT_START";
+    private static final String CB_PICK_DT_DATE_PREFIX = "PICK_DT_DATE:";   // + yyyy-MM-dd
+    private static final String CB_PICK_DT_TIME_PREFIX = "PICK_DT_TIME:";   // + HH:mm|price
+
+    private final DateTimeFormatter MSK_HM_FMT = DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy");
 
     // ✅ НОВОЕ: модерация "Истории" (кружочек) админом
     private static final String CB_STORY_ADMIN_OK_PREFIX = "STORY_ADMIN_OK:";
@@ -168,6 +172,10 @@ public class FemdomBot extends TelegramLongPollingBot {
 
     // -------------------- CALLBACK HANDLER --------------------
 
+    // ======================================================================
+// ✅ 2) handleCallback(CallbackQuery cb) — добавлены 3 новых ветки коллбеков
+//    (показываю метод ЦЕЛИКОМ, как у вас, с добавлением новых else-if в конце)
+// ======================================================================
     private void handleCallback(CallbackQuery cb) throws TelegramApiException {
         long chatId = cb.getMessage().getChatId();
         long userId = cb.getFrom().getId();
@@ -228,6 +236,8 @@ public class FemdomBot extends TelegramLongPollingBot {
             u.pendingPostType = null;
             u.paymentApproved = false;
             u.paymentClaimedAt = null;
+            u.pendingScheduledAtEpochSec = null; // ✅ НОВОЕ
+            u.pendingAmountRub = null;           // ✅ НОВОЕ
             u.state = UserState.VERIFIED;
             db.saveUser(u);
             sendMainMenu(u);
@@ -240,7 +250,145 @@ public class FemdomBot extends TelegramLongPollingBot {
             handleAdminStoryDecision(cb, true);
         } else if (data.startsWith(CB_STORY_ADMIN_NO_PREFIX)) {
             handleAdminStoryDecision(cb, false);
+
+            // ✅ НОВОЕ: выбор даты/времени
+        } else if (data.equals(CB_PICK_DT_START)) {
+            handlePickDateStart(u, cb);
+        } else if (data.startsWith(CB_PICK_DT_DATE_PREFIX)) {
+            handlePickDateChosen(u, cb);
+        } else if (data.startsWith(CB_PICK_DT_TIME_PREFIX)) {
+            handlePickTimeChosen(u, cb);
         }
+    }
+
+    private void handlePickDateStart(UserRecord u, CallbackQuery cb) throws TelegramApiException {
+        // старт сценария выбора
+        u.state = UserState.WAIT_SCHEDULE_DATE;
+        u.pendingPostType = PostType.SCHEDULED_TIME.name();
+        u.pendingScheduledAtEpochSec = null;
+        u.pendingAmountRub = null;
+        db.saveUser(u);
+
+        LocalDateTime nowMsk = LocalDateTime.now(MOSCOW_ZONE);
+
+        // синхронизация с очередью "моментальных"
+        int instantQueue = db.countInstantLikeQueue();
+        LocalDate start = nowMsk.toLocalDate().plusDays(instantQueue);
+
+        String text = "👌 Ок. Сейчас вам нужно выбрать дату и время публикации.\n\n" +
+                "⚠️ Часовой пояс публикаций - Европа/Москва.\n" +
+                "📅 Текущее время сервера: " + nowMsk.format(MSK_HM_FMT) + "\n\n" +
+                "👉 Выберите ближайшее свободное место ниже:";
+
+        List<InlineKeyboardButton> row = new ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            LocalDate d = start.plusDays(i);
+            InlineKeyboardButton b = new InlineKeyboardButton();
+            b.setText("🗓️ " + d.format(DATE_FMT));
+            b.setCallbackData(CB_PICK_DT_DATE_PREFIX + d); // yyyy-MM-dd
+            row.add(b);
+        }
+
+        InlineKeyboardButton backToTariffs = new InlineKeyboardButton();
+        backToTariffs.setText("⬅️ К тарифам");
+        backToTariffs.setCallbackData("SHOW_TARIFFS");
+
+        InlineKeyboardMarkup kb = new InlineKeyboardMarkup(List.of(
+                row,
+                List.of(backToTariffs)
+        ));
+
+        SendMessage sm = new SendMessage(String.valueOf(u.chatId), text);
+        sm.setReplyMarkup(kb);
+        execute(sm);
+        answerOk(cb);
+    }
+
+    private void handlePickDateChosen(UserRecord u, CallbackQuery cb) throws TelegramApiException {
+        if (u.state != UserState.WAIT_SCHEDULE_DATE) {
+            answerOk(cb);
+            return;
+        }
+
+        String iso = cb.getData().substring(CB_PICK_DT_DATE_PREFIX.length()); // yyyy-MM-dd
+        LocalDate date = LocalDate.parse(iso);
+
+        // временно сохраняем выбранную дату в pendingScheduledAtEpochSec как "00:00" (позже добавим время)
+        long epoch = date.atStartOfDay(MOSCOW_ZONE).toEpochSecond();
+        u.pendingScheduledAtEpochSec = epoch;
+        u.state = UserState.WAIT_SCHEDULE_TIME;
+        db.saveUser(u);
+
+        String text = "🗓️ Вы выбрали дату: " + date.format(DATE_FMT) + "\n\n" +
+                "⏰ Теперь выберите время публикации:";
+
+        InlineKeyboardMarkup kb = new InlineKeyboardMarkup(List.of(
+                List.of(btnTime("01:00", 700), btnTime("06:00", 500)),
+                List.of(btnTime("08:00", 600), btnTime("15:00", 500)),
+                List.of(btnTime("19:00", 700), btnTime("21:00", 800)),
+                List.of(btnTime("23:00", 800)),
+                List.of(backToTariffsBtn())
+        ));
+
+        SendMessage sm = new SendMessage(String.valueOf(u.chatId), text);
+        sm.setReplyMarkup(kb);
+        execute(sm);
+        answerOk(cb);
+    }
+
+    private InlineKeyboardButton btnTime(String hhmm, int price) {
+        InlineKeyboardButton b = new InlineKeyboardButton();
+        b.setText("⏰ " + hhmm + " — " + price + "₽");
+        b.setCallbackData(CB_PICK_DT_TIME_PREFIX + hhmm + "|" + price);
+        return b;
+    }
+
+    private InlineKeyboardButton backToTariffsBtn() {
+        InlineKeyboardButton back = new InlineKeyboardButton();
+        back.setText("⬅️ К тарифам");
+        back.setCallbackData("SHOW_TARIFFS");
+        return back;
+    }
+
+    private void handlePickTimeChosen(UserRecord u, CallbackQuery cb) throws TelegramApiException {
+        if (u.state != UserState.WAIT_SCHEDULE_TIME || u.pendingScheduledAtEpochSec == null) {
+            answerOk(cb);
+            return;
+        }
+
+        String payload = cb.getData().substring(CB_PICK_DT_TIME_PREFIX.length()); // HH:mm|price
+        String[] parts = payload.split("\\|");
+        if (parts.length != 2) {
+            answerOk(cb);
+            return;
+        }
+
+        String hhmm = parts[0].trim();
+        int price;
+        try {
+            price = Integer.parseInt(parts[1].trim());
+        } catch (Exception e) {
+            answerOk(cb);
+            return;
+        }
+
+        LocalDate date = Instant.ofEpochSecond(u.pendingScheduledAtEpochSec).atZone(MOSCOW_ZONE).toLocalDate();
+        LocalTime time = LocalTime.parse(hhmm);
+        LocalDateTime dt = LocalDateTime.of(date, time);
+
+        u.pendingScheduledAtEpochSec = dt.atZone(MOSCOW_ZONE).toEpochSecond();
+        u.pendingAmountRub = price;
+
+        // далее — как "моментальный пост": переходим к оплате
+        u.pendingPostType = PostType.SCHEDULED_TIME.name();
+        u.state = UserState.WAIT_PAYMENT;
+        u.paymentApproved = false;
+        u.paymentClaimedAt = null;
+        db.saveUser(u);
+
+        sendManualPaymentOffer(u, PostType.SCHEDULED_TIME); // мы переопределим сумму внутри через pendingAmountRub
+
+        answerOk(cb);
     }
 
     private void answerOk(CallbackQuery cb) throws TelegramApiException {
@@ -700,6 +848,10 @@ public class FemdomBot extends TelegramLongPollingBot {
         tariffsInfoBtn.setText("💎 Тарифы размещения");
         tariffsInfoBtn.setCallbackData("SHOW_TARIFFS");
 
+        InlineKeyboardButton bPickDt = new InlineKeyboardButton();
+        bPickDt.setText("🗓️⏰ Выбрать дату и время");
+        bPickDt.setCallbackData(CB_PICK_DT_START);
+
         InlineKeyboardButton bInstant = new InlineKeyboardButton();
         bInstant.setText(PostType.INSTANT.getTitle());
         bInstant.setCallbackData("POST_INSTANT");
@@ -732,7 +884,8 @@ public class FemdomBot extends TelegramLongPollingBot {
                 List.of(bInstantStory),
                 List.of(bStory),
                 List.of(bVip),
-                List.of(bStandard)
+                List.of(bStandard),
+                List.of(bPickDt)
         ));
 
         SendMessage sm = new SendMessage(String.valueOf(u.chatId), text);
@@ -846,19 +999,34 @@ public class FemdomBot extends TelegramLongPollingBot {
     }
 
     private void sendManualPaymentOffer(UserRecord u, PostType type) throws TelegramApiException {
-        int amount = getPriceRub(type);
+        int amount = (type == PostType.SCHEDULED_TIME && u.pendingAmountRub != null)
+                ? u.pendingAmountRub
+                : getPriceRub(type);
+
+        String whenLine = "";
+        if (type == PostType.SCHEDULED_TIME && u.pendingScheduledAtEpochSec != null) {
+            LocalDateTime dt = Instant.ofEpochSecond(u.pendingScheduledAtEpochSec)
+                    .atZone(MOSCOW_ZONE).toLocalDateTime();
+            whenLine = "\n🗓️⏰ Слот: <b>" + escapeHtml(dt.format(MSK_TIME_FMT)) + "</b>\n";
+        }
 
         String html = """
-                💳 <b>Оплата размещения</b> ✨
-                
-                🧾 Тариф: <b>%s</b>
-                💰 Сумма к переводу: <b>%d ₽</b>
-                
-                🏦 Переведите на карту (<b>%s</b>):
-                <code>%s</code>
-                
-                ✅ После перевода нажмите <b>«Я оплатила»</b> — и мы продолжим 🖤
-                """.formatted(escapeHtml(type.getTitle()), amount, escapeHtml(PAY_BANK_LABEL), PAY_CARD);
+            💳 <b>Оплата размещения</b> ✨
+            
+            🧾 Тариф: <b>%s</b>%s
+            💰 Сумма к переводу: <b>%d ₽</b>
+            
+            🏦 Переведите на карту (<b>%s</b>):
+            <code>%s</code>
+            
+            ✅ После перевода нажмите <b>«Я оплатила»</b> — и мы продолжим 🖤
+            """.formatted(
+                escapeHtml(type.getTitle()),
+                whenLine,
+                amount,
+                escapeHtml(PAY_BANK_LABEL),
+                PAY_CARD
+        );
 
         InlineKeyboardButton paid = new InlineKeyboardButton();
         paid.setText("✅ Я оплатила");
@@ -876,6 +1044,11 @@ public class FemdomBot extends TelegramLongPollingBot {
         sendHtml(u.chatId, html, kb);
     }
 
+    // ======================================================================
+// ✅ 4) handleUserPaid(UserRecord u, CallbackQuery cb)
+//     — сумма в админ-сообщении для SCHEDULED_TIME берётся из pendingAmountRub
+//     (метод целиком, как у вас, с одним изменением суммы)
+// ======================================================================
     private void handleUserPaid(UserRecord u, CallbackQuery cb) throws TelegramApiException {
         if (u.pendingPostType == null) {
             sendText(u.chatId, "😅 Я не вижу выбранный тариф. Пожалуйста, выберите тип публикации заново.");
@@ -894,45 +1067,48 @@ public class FemdomBot extends TelegramLongPollingBot {
         // ✅ НОВАЯ логика для "История": ждём кружочек, а потом отправим админу на Одобрить/Отклонить.
         if (type == PostType.STORY) {
             sendText(u.chatId, """
-                    ✅ Благодарим! 🖤
-                    
-                    Теперь отправьте:
-                    • одно фото или одно видео + текст (подпись) до 300 символов в одном сообщении
-                    • без ссылок/контактов — мы добавим канал и личку автоматически
-                    
-                    После получения мы отправим пост администратору на одобрение/отклонение ✨
-                    """);
+                ✅ Благодарим! 🖤
+                
+                Теперь отправьте:
+                • одно фото или одно видео + текст (подпись) до 300 символов в одном сообщении
+                • без ссылок/контактов — мы добавим канал и личку автоматически
+                
+                После получения мы отправим пост администратору на одобрение/отклонение ✨
+                """);
             answerOk(cb);
             return;
         }
 
         // Обычные посты — как было раньше:
         sendText(u.chatId, """
-                ✅ Благодарим за оплату! 🖤
-                
-                🕵️‍♀️ После проверки перевода модератором ваш пост появится в очереди ✨
-                
-                📩 Теперь отправьте материал для публикации:
-                • Одно фото или одно видео + текст (подпись) в одном сообщении
-                • Текст до 300 символов
-                • Без ссылок/контактов — мы добавим их автоматически
-                """);
+            ✅ Благодарим за оплату! 🖤
+            
+            🕵️‍♀️ После проверки перевода модератором ваш пост появится в очереди ✨
+            
+            📩 Теперь отправьте материал для публикации:
+            • Одно фото или одно видео + текст (подпись) в одном сообщении
+            • Текст до 300 символов
+            • Без ссылок/контактов — мы добавим их автоматически
+            """);
 
         // Админам — заявка на проверку
-        int amount = getPriceRub(type);
+        int amount = (type == PostType.SCHEDULED_TIME && u.pendingAmountRub != null)
+                ? u.pendingAmountRub
+                : getPriceRub(type);
+
         String who = "@" + safeUsername(cb.getFrom());
         String timeMsk = LocalDateTime.now(MOSCOW_ZONE).format(MSK_TIME_FMT);
 
         for (Long adminId : cfg.getAdmins()) {
             String html = """
-                    💸 <b>Проверка оплаты</b>
-                    
-                    ⏰ Время (МСК): <b>%s</b>
-                    👤 Пользователь: <b>%s</b>
-                    🆔 ChatID: <code>%d</code>
-                    🧾 Тариф: <b>%s</b>
-                    💰 Сумма: <b>%d ₽</b>
-                    """.formatted(
+                💸 <b>Проверка оплаты</b>
+                
+                ⏰ Время (МСК): <b>%s</b>
+                👤 Пользователь: <b>%s</b>
+                🆔 ChatID: <code>%d</code>
+                🧾 Тариф: <b>%s</b>
+                💰 Сумма: <b>%d ₽</b>
+                """.formatted(
                     escapeHtml(timeMsk),
                     escapeHtml(who),
                     u.chatId,
@@ -955,6 +1131,10 @@ public class FemdomBot extends TelegramLongPollingBot {
         answerOk(cb);
     }
 
+    // ======================================================================
+// ✅ 5) handleAdminPaymentDecision(CallbackQuery cb, boolean approve)
+//     — для SCHEDULED_TIME после подтверждения оплаты scheduledAt НЕ сбрасывается на "сейчас"
+// ======================================================================
     private void handleAdminPaymentDecision(CallbackQuery cb, boolean approve) throws TelegramApiException {
         long adminId = cb.getFrom().getId();
         if (!cfg.getAdmins().contains(adminId)) {
@@ -976,6 +1156,8 @@ public class FemdomBot extends TelegramLongPollingBot {
             u.paymentApproved = false;
             u.paymentClaimedAt = null;
             u.pendingPostType = null;
+            u.pendingScheduledAtEpochSec = null; // ✅ НОВОЕ
+            u.pendingAmountRub = null;           // ✅ НОВОЕ
             u.state = UserState.VERIFIED;
             db.saveUser(u);
 
@@ -986,10 +1168,10 @@ public class FemdomBot extends TelegramLongPollingBot {
             }
 
             sendText(userChatId, """
-                    ❌ Платёж не подтверждён
-                    
-                    Возможно, перевод ещё не дошёл или сумма/данные не совпали.
-                    """);
+                ❌ Платёж не подтверждён
+                
+                Возможно, перевод ещё не дошёл или сумма/данные не совпали.
+                """);
 
             AnswerCallbackQuery a = new AnswerCallbackQuery(cb.getId());
             a.setText("❌ Отклонено. Пользователь уведомлён.");
@@ -1015,9 +1197,12 @@ public class FemdomBot extends TelegramLongPollingBot {
                 status = "QUEUED";
                 scheduledAt = estimateSchedule(type);
             } else {
-                // ✅ Важно: STORY больше не попадает сюда, т.к. для STORY мы не создаём PENDING_PAYMENT пост.
                 status = "INSTANT";
-                scheduledAt = LocalDateTime.now(MOSCOW_ZONE);
+                if (type == PostType.SCHEDULED_TIME && pending.scheduledAt != null) {
+                    scheduledAt = pending.scheduledAt; // ✅ сохраняем выбранный слот
+                } else {
+                    scheduledAt = LocalDateTime.now(MOSCOW_ZONE);
+                }
             }
 
             db.updatePostAfterPayment(pending.id, status, queuePos, scheduledAt);
@@ -1026,23 +1211,25 @@ public class FemdomBot extends TelegramLongPollingBot {
             u.paymentApproved = false;
             u.paymentClaimedAt = null;
             u.pendingPostType = null;
+            u.pendingScheduledAtEpochSec = null; // ✅ НОВОЕ
+            u.pendingAmountRub = null;           // ✅ НОВОЕ
             u.state = UserState.VERIFIED;
             db.saveUser(u);
 
             sendText(userChatId, """
-                    ✅ Оплата подтверждена! 🖤
-                    
-                    Ваш пост принят и поставлен в очередь на публикацию ✨
-                    """);
+                ✅ Оплата подтверждена! 🖤
+                
+                Ваш пост принят и поставлен в очередь на публикацию ✨
+                """);
         } else {
             // контента ещё нет
             sendText(userChatId, """
-                    ✅ Оплата подтверждена! 🖤
-                    
-                    Теперь отправьте материал для публикации:
-                    • Одно фото или одно видео + подпись одним сообщением
-                    • Без ссылок/контактов ✨
-                    """);
+                ✅ Оплата подтверждена! 🖤
+                
+                Теперь отправьте материал для публикации:
+                • Одно фото или одно видео + подпись одним сообщением
+                • Без ссылок/контактов ✨
+                """);
 
             u.state = UserState.WAIT_POST_CONTENT;
             db.saveUser(u);
@@ -1053,6 +1240,9 @@ public class FemdomBot extends TelegramLongPollingBot {
         execute(a);
     }
 
+    // ======================================================================
+// ✅ 6) getPriceRub(PostType type) — добавлен SCHEDULED_TIME (0, т.к. цена слота в pendingAmountRub)
+// ======================================================================
     private int getPriceRub(PostType type) {
         return switch (type) {
             case INSTANT -> 900;
@@ -1061,11 +1251,19 @@ public class FemdomBot extends TelegramLongPollingBot {
             case STORY -> 500;
             case VIP -> 600;
             case STANDARD -> 400;
+            case SCHEDULED_TIME -> 0; // ✅ цена берётся из выбранного слота
         };
     }
 
-    // -------------------- Пост-контент --------------------
-
+    // ======================================================================
+// ✅ 7) handlePostContent(UserRecord u, Message msg)
+//     — сохранение выбранного scheduledAt для SCHEDULED_TIME
+//     — сохранение amountRub (цены слота) в PostRecord
+//     — сброс pendingScheduledAtEpochSec / pendingAmountRub после успешного принятия
+//
+// ⚠️ ВАЖНО: метод ОГРОМНЫЙ, поэтому показываю его ЦЕЛИКОМ как у вас,
+//           но изменены только места, отмеченные "✅ НОВОЕ/ИЗМЕНЕНО".
+// ======================================================================
     private void handlePostContent(UserRecord u, Message msg) throws TelegramApiException {
         if (u.pendingPostType == null) {
             sendText(u.chatId, "Пожалуйста, сначала выберите тип публикации в меню 🙂");
@@ -1076,7 +1274,7 @@ public class FemdomBot extends TelegramLongPollingBot {
 
         PostType type = PostType.valueOf(u.pendingPostType);
 
-        // ✅ "История": принимаем ОДНО фото ИЛИ ОДНО видео + ТЕКСТ (подпись) и добавляем канал/личку автоматически
+        // ✅ "История": ... (ваш код без изменений)
         if (type == PostType.STORY) {
 
             if (!msg.hasPhoto() && !msg.hasVideo()) {
@@ -1118,7 +1316,6 @@ public class FemdomBot extends TelegramLongPollingBot {
                     ? u.channelLink
                     : "не указан";
 
-            // ✅ Автоподстановка, как у обычных постов
             String finalCaption = caption + "\n\n" +
                     "✨Канал " + channelLink + "\n" +
                     "\uD83D\uDC8EЛичка " + userTag;
@@ -1126,39 +1323,38 @@ public class FemdomBot extends TelegramLongPollingBot {
             String timeMsk = LocalDateTime.now(MOSCOW_ZONE).format(MSK_TIME_FMT);
             int amount = getPriceRub(PostType.STORY);
 
-            // Сохраняем как отдельную историю (НЕ в очередь воркера)
             PostRecord p = new PostRecord();
             p.chatId = u.chatId;
             p.type = PostType.STORY;
             p.mediaType = mediaType;
             p.mediaFileId = fileId;
-            p.caption = finalCaption;          // ✅ теперь реальная подпись
+            p.caption = finalCaption;
             p.queuePosition = 0;
             p.scheduledAt = LocalDateTime.now(MOSCOW_ZONE);
             p.status = "STORY_REVIEW";
+            p.amountRub = amount;
 
             long storyPostId = db.savePostAndReturnId(p);
 
             sendText(u.chatId, """
-        📩 История получена 🖤
-        
-        Сейчас отправляем её администратору на одобрение/отклонение.
-        """);
+📩 История получена 🖤
 
-            // Админу — карточка + кнопки + сам медиа-файл С подписью
+Сейчас отправляем её администратору на одобрение/отклонение.
+""");
+
             for (Long adminId : cfg.getAdmins()) {
                 String html = """
-            📸 <b>История — модерация</b>
-            
-            ⏰ Время (МСК): <b>%s</b>
-            👤 Пользователь: <b>%s</b>
-            🆔 ChatID: <code>%d</code>
-            🧾 Тариф: <b>%s</b>
-            💰 Сумма: <b>%d ₽</b>
-            ✨ Канал: <b>%s</b>
-            💎 Личка: <b>%s</b>
-            🆔 StoryID: <code>%d</code>
-            """.formatted(
+📸 <b>История — модерация</b>
+
+⏰ Время (МСК): <b>%s</b>
+👤 Пользователь: <b>%s</b>
+🆔 ChatID: <code>%d</code>
+🧾 Тариф: <b>%s</b>
+💰 Сумма: <b>%d ₽</b>
+✨ Канал: <b>%s</b>
+💎 Личка: <b>%s</b>
+🆔 StoryID: <code>%d</code>
+""".formatted(
                         escapeHtml(timeMsk),
                         escapeHtml("@" + safeUsername(tgUser)),
                         u.chatId,
@@ -1184,27 +1380,29 @@ public class FemdomBot extends TelegramLongPollingBot {
                     SendVideo sv = new SendVideo();
                     sv.setChatId(String.valueOf(adminId));
                     sv.setVideo(new InputFile(fileId));
-                    sv.setCaption(finalCaption); // ✅ подпись с каналом/личкой
+                    sv.setCaption(finalCaption);
                     execute(sv);
                 } else {
                     SendPhoto sp = new SendPhoto();
                     sp.setChatId(String.valueOf(adminId));
                     sp.setPhoto(new InputFile(fileId));
-                    sp.setCaption(finalCaption); // ✅ подпись с каналом/личкой
+                    sp.setCaption(finalCaption);
                     execute(sp);
                 }
             }
 
-            // ✅ сбрасываем процесс у пользователя
             u.paymentApproved = false;
             u.paymentClaimedAt = null;
             u.pendingPostType = null;
+            u.pendingScheduledAtEpochSec = null; // ✅ НОВОЕ
+            u.pendingAmountRub = null;           // ✅ НОВОЕ
             u.state = UserState.VERIFIED;
             db.saveUser(u);
 
             return;
         }
 
+        // общий случай (ваш код)
         if (!msg.hasPhoto() && !msg.hasVideo()) {
             sendText(u.chatId, "📎 Отправьте одно фото или одно видео с подписью одним сообщением.");
             return;
@@ -1250,21 +1448,35 @@ public class FemdomBot extends TelegramLongPollingBot {
 
         boolean approved = u.paymentApproved;
 
+        // ✅ НОВОЕ: выбранный слот для SCHEDULED_TIME
+        LocalDateTime pickedScheduledAt = null;
+        if (type == PostType.SCHEDULED_TIME && u.pendingScheduledAtEpochSec != null) {
+            pickedScheduledAt = Instant.ofEpochSecond(u.pendingScheduledAtEpochSec)
+                    .atZone(MOSCOW_ZONE).toLocalDateTime();
+        }
+
         LocalDateTime scheduledAt = LocalDateTime.now(MOSCOW_ZONE);
         int queuePos = 0;
         String status;
 
+        // ✅ ИЗМЕНЕНО: назначаем scheduledAt по выбранному слоту
         if (approved) {
             if (type == PostType.VIP || type == PostType.STANDARD) {
                 queuePos = db.nextQueuePosition();
                 status = "QUEUED";
                 scheduledAt = estimateSchedule(type);
+            } else if (type == PostType.SCHEDULED_TIME && pickedScheduledAt != null) {
+                status = "INSTANT";
+                scheduledAt = pickedScheduledAt;
             } else {
                 status = "INSTANT";
                 scheduledAt = LocalDateTime.now(MOSCOW_ZONE);
             }
         } else {
             status = "PENDING_PAYMENT";
+            if (type == PostType.SCHEDULED_TIME && pickedScheduledAt != null) {
+                scheduledAt = pickedScheduledAt;
+            }
         }
 
         PostRecord p = new PostRecord();
@@ -1277,6 +1489,11 @@ public class FemdomBot extends TelegramLongPollingBot {
         p.status = status;
         p.mediaType = mediaType;
 
+        // ✅ НОВОЕ: сумма (для SCHEDULED_TIME — выбранная)
+        p.amountRub = (type == PostType.SCHEDULED_TIME && u.pendingAmountRub != null)
+                ? u.pendingAmountRub
+                : getPriceRub(type);
+
         db.savePost(p);
 
         if (approved) {
@@ -1284,6 +1501,8 @@ public class FemdomBot extends TelegramLongPollingBot {
             u.paymentApproved = false;
             u.paymentClaimedAt = null;
             u.pendingPostType = null;
+            u.pendingScheduledAtEpochSec = null; // ✅ НОВОЕ
+            u.pendingAmountRub = null;           // ✅ НОВОЕ
             u.state = UserState.VERIFIED;
             db.saveUser(u);
 
@@ -1299,6 +1518,10 @@ public class FemdomBot extends TelegramLongPollingBot {
                 text = "✅ Поздравляем! Ваш пост принят 🖤\n\n" +
                         "Он добавлен в " + queueName + " под номером №" + queuePos + ".\n" +
                         "Ориентировочная дата выхода: " + dateStr + " в 20:00 по Москве ✨";
+            } else if (type == PostType.SCHEDULED_TIME) {
+                text = "✅ Ваш пост принят 🖤\n\n" +
+                        "🗓️⏰ Время публикации: " + scheduledAt.format(MSK_TIME_FMT) + "\n" +
+                        "Пост выйдет строго в выбранный слот ✨";
             } else {
                 text = "✅ Ваш пост принят 🖤\n\n" +
                         "Тип публикации: " + type.getTitle() + "\n" +
@@ -1314,11 +1537,11 @@ public class FemdomBot extends TelegramLongPollingBot {
             db.saveUser(u);
 
             sendText(u.chatId, """
-                    📩 Материал получен! Спасибо 🖤
-                    
-                    ⏳ Сейчас ждём подтверждение оплаты модератором.
-                    Как только подтвердят — ваш пост появится в очереди ✨
-                    """);
+                📩 Материал получен! Спасибо 🖤
+                
+                ⏳ Сейчас ждём подтверждение оплаты модератором.
+                Как только подтвердят — ваш пост появится в очереди ✨
+                """);
         }
     }
 

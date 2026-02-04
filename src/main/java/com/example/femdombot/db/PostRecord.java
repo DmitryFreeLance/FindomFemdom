@@ -18,6 +18,9 @@ public class PostRecord {
     public int queuePosition;
     public LocalDateTime scheduledAt;
 
+    // ✅ НОВОЕ: сумма в рублях (для кастомных слотов времени)
+    public Integer amountRub;
+
     // PENDING_PAYMENT / QUEUED / INSTANT / PUBLISHING / PUBLISHED / FAILED / REJECTED ...
     public String status;
 }
